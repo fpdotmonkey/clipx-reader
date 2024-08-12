@@ -6,7 +6,6 @@ use ethercrab::{
     std::{ethercat_now, tx_rx_task},
     MainDevice, MainDeviceConfig, PduStorage, Timeouts,
 };
-use ethercrab::EtherCrabWireRead;
 use tokio::time::MissedTickBehavior;
 
 mod types;
@@ -47,7 +46,7 @@ async fn main() -> Result<(), Error> {
         Timeouts {
             wait_loop_delay: Duration::from_millis(2),
             mailbox_response: Duration::from_millis(1000),
-	    mailbox_echo: Duration::from_millis(200),
+            mailbox_echo: Duration::from_millis(200), // needed to be increased from 100
             ..Default::default()
         },
         MainDeviceConfig::default(),
@@ -68,15 +67,15 @@ async fn main() -> Result<(), Error> {
         if subdevice.name() == "ClipX" {
             subdevice.sdo_write(0x1c12, 0, 0u8).await?;
             subdevice.sdo_write(0x1c12, 1, 0x1601u16).await?;
-	    subdevice.sdo_write(0x1c12, 2, 0x1603u16).await?;
-	    subdevice.sdo_write(0x1c12, 3, 0x1625u16).await.unwrap();
+            subdevice.sdo_write(0x1c12, 2, 0x1603u16).await?;
+            subdevice.sdo_write(0x1c12, 3, 0x1625u16).await?;
             subdevice.sdo_write(0x1c12, 0, 3u8).await?;
 
             subdevice.sdo_write(0x1c13, 0, 0u8).await?;
             subdevice.sdo_write(0x1c13, 1, 0x1a00u16).await?;
-	    subdevice.sdo_write(0x1c13, 2, 0x1a03u16).await?;
-	    subdevice.sdo_write(0x1c13, 3, 0x1a04u16).await?;
-	    subdevice.sdo_write(0x1c13, 4, 0x1a20u16).await?;
+            subdevice.sdo_write(0x1c13, 2, 0x1a20u16).await?;
+            subdevice.sdo_write(0x1c13, 3, 0x1a03u16).await?;
+            subdevice.sdo_write(0x1c13, 4, 0x1a04u16).await?;
             subdevice.sdo_write(0x1c13, 0, 4u8).await?;
         }
     }
@@ -100,7 +99,10 @@ async fn main() -> Result<(), Error> {
 
         if let Some(clipx) = group.iter(&client).find(|slave| slave.name() == "ClipX") {
             let (i, _o) = clipx.io_raw();
-	    println!("{:?}", <(types::ClipxStatus, f32, f32, types::MeasurementStatus)>::unpack_from_slice(i));
+            println!(
+                "{:?}",
+                types::get_measurement(i, [types::Signal::Gross, types::Signal::Net])
+            );
         }
 
         tick_interval.tick().await;
