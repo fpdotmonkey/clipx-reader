@@ -178,6 +178,7 @@ impl std::fmt::Display for InternalError {
 
 impl std::error::Error for InternalError {}
 
+/// The status of each measurement signal.  `true` if invalid.
 #[derive(Debug, EtherCrabWireRead)]
 #[wire(bits = 32)]
 pub struct MeasurementStatus {
@@ -394,7 +395,7 @@ pub fn get_measurement<const N: usize>(
         .into_iter()
         .zip(signals.iter())
         .map(|(signal_type, signal)| {
-            let signal_is_valid = match signal_type {
+            let signal_is_valid = !match signal_type {
                 Signal::Electrical => measurement_status.electrical,
                 Signal::Gross => measurement_status.gross,
                 Signal::Net => measurement_status.net,
