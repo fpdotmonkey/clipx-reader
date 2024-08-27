@@ -90,6 +90,7 @@ async fn main() -> Result<(), Error> {
     signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&shutdown))
         .expect("Register hook");
 
+    let start = time::Instant::now();
     loop {
         // graceful shutdown on ^C
         if shutdown.load(std::sync::atomic::Ordering::Relaxed) {
@@ -104,8 +105,8 @@ async fn main() -> Result<(), Error> {
         if let Some(clipx) = group.iter(&client).find(|slave| slave.name() == "ClipX") {
             let (i, _o) = clipx.io_raw();
             println!(
-                "{:?} {:?}",
-                time::Instant::now(),
+                "{}ms {:?}",
+                start.elapsed().as_millis(),
                 clipx::get_measurement(i, [clipx::Signal::Gross, clipx::Signal::Net])
             );
         }
