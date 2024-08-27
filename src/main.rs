@@ -6,9 +6,9 @@ use ethercrab::{
     std::{ethercat_now, tx_rx_task},
     MainDevice, MainDeviceConfig, PduStorage, Timeouts,
 };
-use tokio::time::MissedTickBehavior;
+use tokio::time;
 
-mod types;
+mod clipx;
 
 /// Maximum number of slaves that can be stored. This must be a power of 2 greater than 1.
 const MAX_SLAVES: usize = 16;
@@ -33,9 +33,12 @@ async fn main() -> Result<(), Error> {
         }
     };
 
-    log::info!("Starting EK1100/EK1501 demo...");
     log::info!(
-        "Ensure an EK1100 or EK1501 is the first slave, with any number of modules connected after"
+        "Starting {}",
+        match std::env::current_exe() {
+            Ok(exe) => exe.display().to_string(),
+            Err(_) => "clipx-reader".into(),
+        }
     );
     log::info!("Run with RUST_LOG=ethercrab=debug or =trace for debug information");
 
@@ -61,8 +64,6 @@ async fn main() -> Result<(), Error> {
 
     log::info!("Discovered {} slaves", group.len());
 
-    // group.iter(&client).find(|subdevice| subdevice.name() == "ClipX").map(|subdevice| subdevice.
-
     for subdevice in group.iter(&client) {
         if subdevice.name() == "ClipX" {
             subdevice.sdo_write(0x1c12, 0, 0u8).await?;
@@ -82,8 +83,8 @@ async fn main() -> Result<(), Error> {
 
     let mut group = group.into_op(&client).await.expect("PRE-OP -> OP");
 
-    let mut tick_interval = tokio::time::interval(Duration::from_millis(10));
-    tick_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    let mut tick_interval = time::interval(Duration::from_millis(10));
+    tick_interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
     let shutdown = Arc::new(std::sync::atomic::AtomicBool::new(false));
     signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&shutdown))
@@ -95,13 +96,17 @@ async fn main() -> Result<(), Error> {
             log::info!("Shutting down...");
             break;
         }
-        group.tx_rx(&client).await.expect("TX/RX");
+        if let Err(err) = group.tx_rx(&client).await {
+            log::error!("Tx/Rx error: {}", err);
+            break;
+        };
 
         if let Some(clipx) = group.iter(&client).find(|slave| slave.name() == "ClipX") {
             let (i, _o) = clipx.io_raw();
             println!(
-                "{:?}",
-                types::get_measurement(i, [types::Signal::Gross, types::Signal::Net])
+                "{:?} {:?}",
+                time::Instant::now(),
+                clipx::get_measurement(i, [clipx::Signal::Gross, clipx::Signal::Net])
             );
         }
 
