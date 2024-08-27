@@ -1,0 +1,103 @@
+syntax = "proto3";
+
+package monitor;
+
+message ClipxMeasurement {
+  uint64 time_millis = 1;
+
+  oneof result {
+    Signals signals = 2;
+    Error error = 3;
+  }
+  
+  // The signals which are read from the device
+  message Signals {
+    optional float gross = 1;
+    optional float net = 2;
+  }
+
+  message Error {
+    oneof error_kind {
+      ClipxError clipx_error = 1;
+      uint32 wire_error = 2;
+    }
+  }
+
+  message ClipxError {
+    repeated Single error = 1;
+
+    message Single {
+      oneof error_kind {
+	DeviceError device_error = 1;
+	InternalError internal_error = 2;
+      }
+    }
+
+    enum DeviceError {
+      // The ClipX is switched not on, initialized, or the Ethernet
+      // connection is off.
+      NOT_READY = 0;
+      // Error in the current loaded parameter set. Load a different
+      // parameter set or check all settings and resave the parameter
+      // set. If the parameter set is stored on PC, you can also import
+      // it from there and check the stored version for errors.
+      PARAMETER_SET = 1;
+      // No current can flow at the current output; there is a line break.
+      DAC_ALARM = 2;
+      // The 1-wire TEDS cannot be read. Check the wiring. If possible,
+      // check whether the TEDS module can be read on another device, or
+      // is defective.
+      ONE_WIRE_COMMUNICATION = 3;
+      // The ClipX bus is not working correctly. Check the wiring of the
+      // bus system
+      CLIPX_BUS = 4;
+      // The excitation voltage for the sensor has been short-circuited.
+      // Check the wiring of the sensor.
+      SENSOR_EXCITATION = 5;
+      // The test signal is activated, no measured values are captured.
+      TEST_SIGNAL_ACTIVE = 6;
+      // There is an error in the PPMP connection; the system LED is lit
+      // yellow.
+      PPMP = 7;
+      // The data in the TEDS module either contain errors or cannot be
+      // set.
+      TEDS = 8;
+      // The ClipX hasn't reported as alive for more than 1.0 second.
+      //
+      // Possibly a disconnection or power failure.
+      NO_HEARTBEAT = 9;
+    }
+
+    // ClipX errors related to internal hardware or software faults.
+    // Contact HBM and share the error information if encountered.
+    //
+    // Email: <support@hbkworld.com>
+    //
+    // Phone:
+    //
+    // - (Europe) +49 6151 803-0
+    // - (Americas) +1 (800) 578-4260 or +1 (508) 624-4500
+    // - (Asia) +86 512-68247776
+    enum InternalError {
+      // Error related to the internal file system.
+      FILE_SYSTEM = 0;
+      // Error related to analog-digital converter communication.
+      ADC_COMMUNICATION = 1;
+      // Error related to analog-digital converter interrupt request.
+      ADC_IRQ = 2;
+      // No change in the analog-digital converter state in 50 ms.
+      ADC_FROZEN = 3;
+      // Error related to analog-digital converter direct memory access.
+      ADC_DMA = 4;
+      // Error related to digital-analog converter communication.
+      DAC_COMMUNICATION = 5;
+      // Error in the RAM of the ClipX (not in the RAM of the CPU).
+      EXTERNAL_RAM = 6;
+      // Internal error in the fieldbus controller (only on BM40IE and BM40PB).
+      FIELDBUS_CONTROLLER = 7;
+      // There is an error in the calibration of the ClipX.
+      FACTORY_CALIBRATION = 8;
+    }
+  }
+}
+

@@ -129,10 +129,12 @@ impl std::error::Error for DeviceError {}
 /// Contact HBM and share the error information if encountered.
 ///
 /// Email: <support@hbkworld.com>
-/// Phone: [Europe] +49 6151 803-0
-///        [Americas] +1 (800) 578-4260
-///                   +1 (508) 624-4500
-///        [Asia] +86 512-68247776
+///
+/// Phone:
+///
+/// - (Europe) +49 6151 803-0
+/// - (Americas) +1 (800) 578-4260 or +1 (508) 624-4500
+/// - (Asia) +86 512-68247776
 pub enum InternalError {
     /// Error related to the internal file system.
     FileSystem,
@@ -234,7 +236,7 @@ pub struct MeasurementStatus {
     analog_output: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Signal {
     /// Input signal in the unit of the measured variable, e.g. in mV/V.
     Electrical,
