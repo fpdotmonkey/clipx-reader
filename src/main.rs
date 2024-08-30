@@ -9,7 +9,10 @@ use ethercrab::{
 use tokio::time;
 
 mod clipx;
-mod monitor;
+pub mod monitor {
+    // protobuf generated
+    include!(concat!(env!("OUT_DIR"), "/monitor.rs"));
+}
 
 /// Maximum number of slaves that can be stored. This must be a power of 2 greater than 1.
 const MAX_SLAVES: usize = 16;
@@ -121,16 +124,14 @@ async fn main() -> Result<(), Error> {
             let (i, _o) = clipx.io_raw();
             println!(
                 "{:?}",
-                monitor::from_measurement(
-                    start.elapsed().as_millis().try_into().unwrap_or(u64::MAX),
-                    clipx::get_measurement(
-                        i,
-                        [
-                            clipx::Signal::Electrical,
-                            clipx::Signal::Gross,
-                            clipx::Signal::Net
-                        ]
-                    )
+                clipx::get_measurement(
+                    start.elapsed(),
+                    i,
+                    [
+                        crate::monitor::clipx_measurement::signals::SignalKind::Electrical,
+                        crate::monitor::clipx_measurement::signals::SignalKind::Gross,
+                        crate::monitor::clipx_measurement::signals::SignalKind::Net
+                    ]
                 )
             );
         }
