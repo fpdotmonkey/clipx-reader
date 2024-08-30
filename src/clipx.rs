@@ -254,6 +254,7 @@ pub fn get_measurement<const N: usize>(
                 (clipx_status, measurement_status, signals)
             }
             Err(err) => {
+                println!("{:?}", err);
                 return crate::monitor::ClipxMeasurement {
                     time_millis: (time.as_millis() % (u64::MAX as u128 + 1))
                         .try_into()

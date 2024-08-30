@@ -1,0 +1,16 @@
+beautifulsoup4==4.12.3
+black==24.8.0
+click==8.1.7
+colorama==0.4.6
+flake8==7.1.1
+google==3.0.0
+mccabe==0.7.0
+mypy-extensions==1.0.0
+packaging==24.1
+pathspec==0.12.1
+platformdirs==4.2.2
+protobuf==5.28.0
+pycodestyle==2.12.1
+pyflakes==3.2.0
+setuptools==74.0.0
+soupsieve==2.6
