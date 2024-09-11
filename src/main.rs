@@ -66,18 +66,32 @@ async fn main() -> Result<(), Error> {
 
     for subdevice in group.iter(&client) {
         if subdevice.name() == "ClipX" {
+            // RxPDOs
             subdevice.sdo_write(0x1c12, 0, 0u8).await?;
+            // Fieldbus value 1
             subdevice.sdo_write(0x1c12, 1, 0x1601u16).await?;
+            // Fieldbus flags
             subdevice.sdo_write(0x1c12, 2, 0x1603u16).await?;
+            // Control flags
             subdevice.sdo_write(0x1c12, 3, 0x1625u16).await?;
             subdevice.sdo_write(0x1c12, 0, 3u8).await?;
 
+            // TxPDOs
             subdevice.sdo_write(0x1c13, 0, 0u8).await?;
+            // System status
             subdevice.sdo_write(0x1c13, 1, 0x1a00u16).await?;
+            // Measurement value status
             subdevice.sdo_write(0x1c13, 2, 0x1a20u16).await?;
-            subdevice.sdo_write(0x1c13, 3, 0x1a03u16).await?;
-            subdevice.sdo_write(0x1c13, 4, 0x1a04u16).await?;
-            subdevice.sdo_write(0x1c13, 0, 4u8).await?;
+            // Electrical value
+            subdevice.sdo_write(0x1c13, 3, 0x1a02u16).await?;
+            // Gross value
+            subdevice.sdo_write(0x1c13, 4, 0x1a03u16).await?;
+            // Net value
+            subdevice.sdo_write(0x1c13, 5, 0x1a04u16).await?;
+            subdevice.sdo_write(0x1c13, 0, 5u8).await?;
+
+            // set sensor type to Full bridge 2.5 mv/V (CF)
+            subdevice.sdo_write(0x4400, 1, 8u8).await?;
         }
     }
 
@@ -107,7 +121,14 @@ async fn main() -> Result<(), Error> {
             println!(
                 "{}ms {:?}",
                 start.elapsed().as_millis(),
-                clipx::get_measurement(i, [clipx::Signal::Gross, clipx::Signal::Net])
+                clipx::get_measurement(
+                    i,
+                    [
+                        clipx::Signal::Electrical,
+                        clipx::Signal::Gross,
+                        clipx::Signal::Net
+                    ]
+                )
             );
         }
 
