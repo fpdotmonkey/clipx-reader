@@ -1,4 +1,7 @@
-use ethercrab_wire::{EtherCrabWireRead, WireError};
+use ethercrab_wire::EtherCrabWireRead;
+use tokio::time;
+
+use crate::monitor::clipx_measurement;
 
 #[derive(Debug, EtherCrabWireRead)]
 #[wire(bits = 32)]
@@ -61,123 +64,6 @@ pub struct ClipxStatus {
     heartbeat: bool,
 }
 
-/// An issue that would preclude reporting measurements.
-pub enum DeviceError {
-    /// The ClipX is switched not on, initialized, or the Ethernet
-    /// connection is off.
-    NotReady,
-    /// Error in the current loaded parameter set. Load a different
-    /// parameter set or check all settings and resave the parameter
-    /// set. If the parameter set is stored on PC, you can also import
-    /// it from there and check the stored version for errors.
-    ParameterSet,
-    /// The internal function of the device has failed.  Contact HBM.
-    Internal(InternalError),
-    /// No current can flow at the current output; there is a line break.
-    DacAlarm,
-    /// The 1-wire TEDS cannot be read. Check the wiring. If possible,
-    /// check whether the TEDS module can be read on another device, or
-    /// is defective.
-    OneWireCommunication,
-    /// The ClipX bus is not working correctly. Check the wiring of the
-    /// bus system
-    ClipxBus,
-    /// The excitation voltage for the sensor has been short-circuited.
-    /// Check the wiring of the sensor.
-    SensorExcitation,
-    /// The test signal is activated, no measured values are captured.
-    TestSignalActive,
-    /// There is an error in the PPMP connection; the system LED is lit
-    /// yellow.
-    Ppmp,
-    /// The data in the TEDS module either contain errors or cannot be
-    /// set.
-    Teds,
-    /// The ClipX hasn't reported as alive for more than 1.0 second.
-    ///
-    /// Possibly a disconnection or power failure.
-    NoHeartbeat,
-}
-
-impl std::fmt::Debug for DeviceError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-	    DeviceError::NotReady => write!(f, "NotReady: The ClipX is switched not on, initialized, or the Ethernet connection is off."),
-	    DeviceError::ParameterSet => write!(f, "ParameterSet: Error in the current loaded parameter set. Load a different parameter set or check all settings and resave the parameter set. If the parameter set is stored on PC, you can also import it from there and check the stored version for errors."),
-	    DeviceError::Internal(err) => write!(f, "ClipX Internal: {err:?}.  Contact HBM <support@hbkworld.com>."),
-	    DeviceError::DacAlarm => write!(f, "DacAlarm: No current can flow at the current output; there is a line break."),
-	    DeviceError::OneWireCommunication => write!(f, "OneWireCommunication: The 1-wire TEDS cannot be read. Check the wiring. If possible, check whether the TEDS module can be read on another device, or is defective."),
-	    DeviceError::ClipxBus => write!(f, "ClipxBus: The ClipX bus is not working correctly. Check the wiring of the bus system"),
-	    DeviceError::SensorExcitation => write!(f, "SensorExcitation: The excitation voltage for the sensor has been short-circuited. Check the wiring of the sensor."),
-	    DeviceError::TestSignalActive => write!(f, "TestSignalActive: The test signal is activated, no measured values are captured."),
-	    DeviceError::Ppmp => write!(f, "Ppmp: There is an error in the PPMP connection; the system LED is lit yellow."),
-	    DeviceError::Teds => write!(f, "Teds: The data in the TEDS module either contain errors or cannot be set."),
-	    DeviceError::NoHeartbeat => write!(f, "NoHeartbeat: The ClipX hasn't reported as alive for more than 1.0 second. Possibly a disconnection or power failure."),
-	}
-    }
-}
-
-impl std::fmt::Display for DeviceError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        std::fmt::Debug::fmt(self, f)
-    }
-}
-
-impl std::error::Error for DeviceError {}
-
-/// ClipX errors related to internal hardware or software faults.
-/// Contact HBM and share the error information if encountered.
-///
-/// Email: <support@hbkworld.com>
-/// Phone: [Europe] +49 6151 803-0
-///        [Americas] +1 (800) 578-4260
-///                   +1 (508) 624-4500
-///        [Asia] +86 512-68247776
-pub enum InternalError {
-    /// Error related to the internal file system.
-    FileSystem,
-    /// Error related to analog-digital converter communication.
-    AdcCommunication,
-    /// Error related to analog-digital converter interrupt request.
-    AdcIrq,
-    /// No change in the analog-digital converter state in 50 ms.
-    AdcFrozen,
-    /// Error related to analog-digital converter direct memory access.
-    AdcDma,
-    /// Error related to digital-analog converter communication.
-    DacCommunication,
-    /// Error in the RAM of the ClipX (not in the RAM of the CPU).
-    ExternalRam,
-    /// Internal error in the fieldbus controller (only on BM40IE and BM40PB).
-    FieldbusController,
-    /// There is an error in the calibration of the ClipX.
-    FactoryCalibration,
-}
-
-impl std::fmt::Debug for InternalError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-	    InternalError::FileSystem => write!(f, "FileSystem: Error related to the internal file system."),
-	    InternalError::AdcCommunication => write!(f, "AdcCommunication: Error related to analog-digital converter communication."),
-	    InternalError::AdcIrq => write!(f, "AdcIrq: Error related to analog-digital converter interrupt request."),
-	    InternalError::AdcFrozen => write!(f, "AdcFrozen: No change in the analog-digital converter state in 50 ms."),
-	    InternalError::AdcDma => write!(f, "AdcDma: Error related to analog-digital converter direct memory access."),
-	    InternalError::DacCommunication => write!(f, "DacCommunication: Error related to digital-analog converter communication."),
-	    InternalError::ExternalRam => write!(f, "ExternalRam: Error in the RAM of the ClipX (not in the RAM of the CPU)."),
-	    InternalError::FieldbusController => write!(f, "FieldbusController: Internal error in the fieldbus controller (only on BM40IE and BM40PB)."),
-	    InternalError::FactoryCalibration => write!(f, "FactoryCalibration: There is an error in the calibration of the ClipX."),
-	}
-    }
-}
-
-impl std::fmt::Display for InternalError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        std::fmt::Debug::fmt(self, f)
-    }
-}
-
-impl std::error::Error for InternalError {}
-
 /// The status of each measurement signal.  `true` if invalid.
 #[derive(Debug, EtherCrabWireRead)]
 #[wire(bits = 32)]
@@ -234,199 +120,208 @@ pub struct MeasurementStatus {
     analog_output: bool,
 }
 
-#[derive(Debug)]
-pub enum Signal {
-    /// Input signal in the unit of the measured variable, e.g. in mV/V.
-    Electrical,
-    /// Gross signal.
-    Gross,
-    /// Net signal.
-    Net,
-    /// Peak value minimum.
-    Minimum,
-    /// Peak value maximum
-    Maximum,
-    /// Peak-to-peak value.
-    PeakToPeak,
-    /// Captured value 1.
-    Captured1,
-    /// Captured value 2.
-    Captured2,
-    /// Value on the device's ClipX bus at address 1.
-    Bus1,
-    /// Value on the device's ClipX bus at address 2.
-    Bus2,
-    /// Value on the device's ClipX bus at address 3.
-    Bus3,
-    /// Value on the device's ClipX bus at address 4.
-    Bus4,
-    /// Value on the device's ClipX bus at address 5.
-    Bus5,
-    /// Value on the device's ClipX bus at address 6.
-    Bus6,
-    /// Value of the calculation channel 1.
-    Calculated1,
-    /// Value of the calculation channel 2.
-    Calculated2,
-    /// Value of the calculation channel 3.
-    Calculated3,
-    /// Value of the calculation channel 4.
-    Calculated4,
-    /// Value of the calculation channel 5.
-    Calculated5,
-    /// Value of the calculation channel 6.
-    Calculated6,
-    /// Value 1 transmitted via Ethernet.
-    ExternalEthernet1,
-    /// Value 2 transmitted via Ethernet.
-    ExternalEthernet2,
-    /// Value 1 transmitted via the fieldbus.
-    ExternalFieldbus1,
-    /// Value 2 transmitted via the fieldbus.
-    ExternalFieldbus2,
-    /// Value of the analog output in V or mA.
-    AnalogOutput,
-}
-
-impl From<ClipxStatus> for Vec<DeviceError> {
+impl From<ClipxStatus> for clipx_measurement::error::Clipx {
     fn from(clipx_status: ClipxStatus) -> Self {
+        use clipx_measurement::error::clipx::{fault, Fault};
+
         let mut errors = vec![];
         if clipx_status.error_file_system {
-            errors.push(DeviceError::Internal(InternalError::FileSystem));
+            errors.push(Fault {
+                kind: Some(fault::Kind::Internal(fault::Internal::FileSystem.into())),
+            });
         }
         if clipx_status.error_adc_communication {
-            errors.push(DeviceError::Internal(InternalError::AdcCommunication));
+            errors.push(Fault {
+                kind: Some(fault::Kind::Internal(
+                    fault::Internal::AdcCommunication.into(),
+                )),
+            });
         }
         if clipx_status.error_adc_irq {
-            errors.push(DeviceError::Internal(InternalError::AdcIrq));
+            errors.push(Fault {
+                kind: Some(fault::Kind::Internal(fault::Internal::AdcIrq.into())),
+            });
         }
         if clipx_status.error_adc_frozen {
-            errors.push(DeviceError::Internal(InternalError::AdcFrozen));
+            errors.push(Fault {
+                kind: Some(fault::Kind::Internal(fault::Internal::AdcFrozen.into())),
+            });
         }
         if clipx_status.error_adc_dma {
-            errors.push(DeviceError::Internal(InternalError::AdcDma));
+            errors.push(Fault {
+                kind: Some(fault::Kind::Internal(fault::Internal::AdcDma.into())),
+            });
         }
         if clipx_status.error_dac_communication {
-            errors.push(DeviceError::Internal(InternalError::DacCommunication));
+            errors.push(Fault {
+                kind: Some(fault::Kind::Internal(
+                    fault::Internal::DacCommunication.into(),
+                )),
+            });
         }
         if clipx_status.error_external_ram {
-            errors.push(DeviceError::Internal(InternalError::ExternalRam));
+            errors.push(Fault {
+                kind: Some(fault::Kind::Internal(fault::Internal::ExternalRam.into())),
+            });
         }
         if clipx_status.error_fieldbus_controller {
-            errors.push(DeviceError::Internal(InternalError::FieldbusController));
+            errors.push(Fault {
+                kind: Some(fault::Kind::Internal(
+                    fault::Internal::FieldbusController.into(),
+                )),
+            });
         }
         if clipx_status.error_factory_calibration {
-            errors.push(DeviceError::Internal(InternalError::FactoryCalibration));
+            errors.push(Fault {
+                kind: Some(fault::Kind::Internal(
+                    fault::Internal::FactoryCalibration.into(),
+                )),
+            });
         }
         if !clipx_status.device_ready {
-            errors.push(DeviceError::NotReady);
+            errors.push(Fault {
+                kind: Some(fault::Kind::Device(fault::Device::NotReady.into())),
+            });
         }
         if clipx_status.error_parameter_set {
-            errors.push(DeviceError::ParameterSet);
+            errors.push(Fault {
+                kind: Some(fault::Kind::Device(fault::Device::ParameterSet.into())),
+            });
         }
         if clipx_status.dac_alarm {
-            errors.push(DeviceError::DacAlarm);
+            errors.push(Fault {
+                kind: Some(fault::Kind::Device(fault::Device::DacAlarm.into())),
+            });
         }
         if clipx_status.error_one_wire_communication {
-            errors.push(DeviceError::OneWireCommunication);
+            errors.push(Fault {
+                kind: Some(fault::Kind::Device(
+                    fault::Device::OneWireCommunication.into(),
+                )),
+            });
         }
         if clipx_status.error_clipx_bus {
-            errors.push(DeviceError::ClipxBus);
+            errors.push(Fault {
+                kind: Some(fault::Kind::Device(fault::Device::ClipxBus.into())),
+            });
         }
         if clipx_status.error_sensor_excitation {
-            errors.push(DeviceError::SensorExcitation);
+            errors.push(Fault {
+                kind: Some(fault::Kind::Device(fault::Device::SensorExcitation.into())),
+            });
         }
         if clipx_status.test_signal_active {
-            errors.push(DeviceError::TestSignalActive);
+            errors.push(Fault {
+                kind: Some(fault::Kind::Device(fault::Device::TestSignalActive.into())),
+            });
         }
         if clipx_status.error_ppmp {
-            errors.push(DeviceError::Ppmp);
+            errors.push(Fault {
+                kind: Some(fault::Kind::Device(fault::Device::Ppmp.into())),
+            });
         }
         if clipx_status.error_teds {
-            errors.push(DeviceError::Teds);
+            errors.push(Fault {
+                kind: Some(fault::Kind::Device(fault::Device::Teds.into())),
+            });
         }
-        errors
-    }
-}
-
-#[derive(Debug)]
-pub enum GetMeasurementError {
-    Device(Vec<DeviceError>),
-    Wire(WireError),
-}
-
-impl std::fmt::Display for GetMeasurementError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        std::fmt::Debug::fmt(self, f)
-    }
-}
-
-impl std::error::Error for GetMeasurementError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            GetMeasurementError::Device(_) => None,
-            GetMeasurementError::Wire(err) => Some(err),
-        }
+        Self { error: errors }
     }
 }
 
 /// Get measurement data out of the input buffer.
 ///
 /// This assumes that the first 32 bits out of the buffer are the System
-/// Status (`0x4200:1`), the 32 following are the Measurement Status
-/// (`0x44f4:1`), and that the rest are [`f32`] signals in the order
-/// given in the `signals` arg.
+/// Status (SDO `0x4200:1`), the 32 following are the Measurement Status
+/// (SDO `0x44f4:1`), and that the rest are [`f32`] signals in the order
+/// given in the `signal_types` arg.
 ///
 /// This will return `Err` if the System Status indicates an error.  The
 /// individual values in `Ok` will be `None` if that signal's
 /// measurement status is invalid.
+///
+/// After [`u64::MAX`] milliseconds, the time will wrap back to 0.
 pub fn get_measurement<const N: usize>(
+    time: time::Duration,
     i: &[u8],
-    signal_types: [Signal; N],
-) -> Result<Vec<(Signal, Option<f32>)>, GetMeasurementError> {
+    signal_types: [clipx_measurement::signals::SignalKind; N],
+) -> crate::monitor::ClipxMeasurement {
+    use clipx_measurement::signals::SignalKind;
+
     let (clipx_status, measurement_status, signals) =
-        <(ClipxStatus, MeasurementStatus, [f32; N])>::unpack_from_slice(i)
-            .map_err(GetMeasurementError::Wire)?;
-    let maybe_errors: Vec<DeviceError> = clipx_status.into();
-    if !maybe_errors.is_empty() {
-        return Err(GetMeasurementError::Device(maybe_errors));
-    }
-    Ok(signal_types
-        .into_iter()
-        .zip(signals.iter())
-        .map(|(signal_type, signal)| {
-            let signal_is_valid = !match signal_type {
-                Signal::Electrical => measurement_status.electrical,
-                Signal::Gross => measurement_status.gross,
-                Signal::Net => measurement_status.net,
-                Signal::Minimum => measurement_status.minimum,
-                Signal::Maximum => measurement_status.maximum,
-                Signal::PeakToPeak => measurement_status.peak_to_peak,
-                Signal::Captured1 => measurement_status.captured1,
-                Signal::Captured2 => measurement_status.captured2,
-                Signal::Bus1 => measurement_status.bus1,
-                Signal::Bus2 => measurement_status.bus2,
-                Signal::Bus3 => measurement_status.bus3,
-                Signal::Bus4 => measurement_status.bus4,
-                Signal::Bus5 => measurement_status.bus5,
-                Signal::Bus6 => measurement_status.bus6,
-                Signal::Calculated1 => measurement_status.calculated1,
-                Signal::Calculated2 => measurement_status.calculated2,
-                Signal::Calculated3 => measurement_status.calculated3,
-                Signal::Calculated4 => measurement_status.calculated4,
-                Signal::Calculated5 => measurement_status.calculated5,
-                Signal::Calculated6 => measurement_status.calculated6,
-                Signal::ExternalEthernet1 => measurement_status.external_ethernet1,
-                Signal::ExternalEthernet2 => measurement_status.external_ethernet2,
-                Signal::ExternalFieldbus1 => measurement_status.external_fieldbus1,
-                Signal::ExternalFieldbus2 => measurement_status.external_fieldbus2,
-                Signal::AnalogOutput => measurement_status.analog_output,
-            };
-            if signal_is_valid {
-                (signal_type, Some(signal).cloned())
-            } else {
-                (signal_type, None)
+        match <(ClipxStatus, MeasurementStatus, [f32; N])>::unpack_from_slice(i) {
+            Ok((clipx_status, measurement_status, signals)) => {
+                (clipx_status, measurement_status, signals)
             }
-        })
-        .collect())
+            Err(err) => {
+                println!("{:?}", err);
+                return crate::monitor::ClipxMeasurement {
+                    time_millis: (time.as_millis() % (u64::MAX as u128 + 1))
+                        .try_into()
+                        .unwrap(),
+                    result: Some(clipx_measurement::Result::Err(clipx_measurement::Error {
+                        error_kind: Some(clipx_measurement::error::ErrorKind::Wire(err as u32)),
+                    })),
+                };
+            }
+        };
+    let maybe_errors: clipx_measurement::error::Clipx = clipx_status.into();
+    if !maybe_errors.error.is_empty() {
+        return crate::monitor::ClipxMeasurement {
+            time_millis: (time.as_millis() % (u64::MAX as u128 + 1))
+                .try_into()
+                .unwrap(),
+            result: Some(clipx_measurement::Result::Err(clipx_measurement::Error {
+                error_kind: Some(clipx_measurement::error::ErrorKind::Clipx(maybe_errors)),
+            })),
+        };
+    }
+
+    crate::monitor::ClipxMeasurement {
+        time_millis: time.as_millis().try_into().unwrap_or(u64::MAX),
+        result: Some(clipx_measurement::Result::Ok(clipx_measurement::Signals {
+            signal: signal_types
+                .into_iter()
+                .zip(signals.iter())
+                .map(|(signal_type, signal)| {
+                    let signal_is_valid = !match signal_type {
+                        SignalKind::Electrical => measurement_status.electrical,
+                        SignalKind::Gross => measurement_status.gross,
+                        SignalKind::Net => measurement_status.net,
+                        SignalKind::Minimum => measurement_status.minimum,
+                        SignalKind::Maximum => measurement_status.maximum,
+                        SignalKind::PeakToPeak => measurement_status.peak_to_peak,
+                        SignalKind::Captured1 => measurement_status.captured1,
+                        SignalKind::Captured2 => measurement_status.captured2,
+                        SignalKind::Bus1 => measurement_status.bus1,
+                        SignalKind::Bus2 => measurement_status.bus2,
+                        SignalKind::Bus3 => measurement_status.bus3,
+                        SignalKind::Bus4 => measurement_status.bus4,
+                        SignalKind::Bus5 => measurement_status.bus5,
+                        SignalKind::Bus6 => measurement_status.bus6,
+                        SignalKind::Calculated1 => measurement_status.calculated1,
+                        SignalKind::Calculated2 => measurement_status.calculated2,
+                        SignalKind::Calculated3 => measurement_status.calculated3,
+                        SignalKind::Calculated4 => measurement_status.calculated4,
+                        SignalKind::Calculated5 => measurement_status.calculated5,
+                        SignalKind::Calculated6 => measurement_status.calculated6,
+                        SignalKind::ExternalEthernet1 => measurement_status.external_ethernet1,
+                        SignalKind::ExternalEthernet2 => measurement_status.external_ethernet2,
+                        SignalKind::ExternalFieldbus1 => measurement_status.external_fieldbus1,
+                        SignalKind::ExternalFieldbus2 => measurement_status.external_fieldbus2,
+                        SignalKind::AnalogOutput => measurement_status.analog_output,
+                    };
+                    if signal_is_valid {
+                        (signal_type, Some(signal).cloned())
+                    } else {
+                        (signal_type, None)
+                    }
+                })
+                .map(|(kind, value)| clipx_measurement::signals::Signal {
+                    r#type: kind.into(),
+                    value,
+                })
+                .collect(),
+        })),
+    }
 }

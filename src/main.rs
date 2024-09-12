@@ -1,14 +1,75 @@
 use std::{sync::Arc, time::Duration};
 
+use argh::FromArgs;
 use env_logger::Env;
 use ethercrab::{
-    error::Error,
     std::{ethercat_now, tx_rx_task},
     MainDevice, MainDeviceConfig, PduStorage, Timeouts,
 };
 use tokio::time;
 
 mod clipx;
+pub mod monitor {
+    // protobuf generated
+    include!(concat!(env!("OUT_DIR"), "/monitor.rs"));
+
+    pub fn to_csv(measurement: &ClipxMeasurement) -> csv::Result<()> {
+        let mut writer = csv::Writer::from_writer(std::io::stdout());
+        let time = measurement.time_millis;
+        let Some(ref result) = measurement.result else {
+            writer.write_record(&[time.to_string(), "None".into()])?;
+            return Ok(());
+        };
+        let mut record = vec![time.to_string(), "Some".into()];
+        match result {
+            clipx_measurement::Result::Ok(signals) => {
+                record.push("Signals".into());
+                for signal in &signals.signal {
+                    record.push(signal.r#type().as_str_name().into());
+                    record.push(signal.value().to_string());
+                }
+            }
+            clipx_measurement::Result::Err(error) => {
+                record.push("Error".into());
+                let Some(ref error_kind) = error.error_kind else {
+                    record.push("Unknown".into());
+                    writer.write_record(&record)?;
+                    return Ok(());
+                };
+                match error_kind {
+                    clipx_measurement::error::ErrorKind::Clipx(errors) => {
+                        for fault in &errors.error {
+                            if let Some(kind) = fault.kind {
+                                match kind {
+                                    clipx_measurement::error::clipx::fault::Kind::Device(code) => {
+                                        record.push("Device".into());
+                                        record.push(code.to_string());
+                                    }
+                                    clipx_measurement::error::clipx::fault::Kind::Internal(
+                                        code,
+                                    ) => {
+                                        record.push("Internal".into());
+                                        record.push(code.to_string());
+                                    }
+                                }
+                            } else {
+                                record.push("Unknown".into());
+                            }
+                        }
+                    }
+                    clipx_measurement::error::ErrorKind::Wire(code) => {
+                        record.push("Wire".into());
+                        record.push(code.to_string());
+                    }
+                }
+            }
+        }
+        writer.write_record(&record)?;
+        Ok(())
+    }
+}
+
+use crate::monitor::clipx_measurement::signals::SignalKind;
 
 /// Maximum number of slaves that can be stored. This must be a power of 2 greater than 1.
 const MAX_SLAVES: usize = 16;
@@ -21,17 +82,19 @@ const PDI_LEN: usize = 64;
 
 static PDU_STORAGE: PduStorage<MAX_FRAMES, MAX_PDU_DATA> = PduStorage::new();
 
+#[derive(FromArgs)]
+/// Monitor data that's coming out of an HBM ClipX amplifier.
+struct Cli {
+    /// the network interface for the EtherCAT communication
+    #[argh(positional)]
+    interface: String,
+}
+
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
-    let interface: String = match std::env::args().nth(1) {
-        Some(arg) => arg,
-        None => {
-            eprintln!("provide a network device as the first argument");
-            return Err(Error::Internal);
-        }
-    };
+    let cli: Cli = argh::from_env();
 
     log::info!(
         "Starting {}",
@@ -55,7 +118,7 @@ async fn main() -> Result<(), Error> {
         MainDeviceConfig::default(),
     ));
 
-    tokio::spawn(tx_rx_task(&interface, tx, rx).expect("spawn TX/RX task"));
+    tokio::spawn(tx_rx_task(&cli.interface, tx, rx).expect("spawn TX/RX task"));
 
     let mut group = client
         .init_single_group::<MAX_SLAVES, PDI_LEN>(ethercat_now)
@@ -105,12 +168,14 @@ async fn main() -> Result<(), Error> {
         .expect("Register hook");
 
     let start = time::Instant::now();
+    // let mut buffer = vec![];
     loop {
         // graceful shutdown on ^C
         if shutdown.load(std::sync::atomic::Ordering::Relaxed) {
             log::info!("Shutting down...");
             break;
         }
+        // shutdown on EtherCAT disconnect
         if let Err(err) = group.tx_rx(&client).await {
             log::error!("Tx/Rx error: {}", err);
             break;
@@ -118,18 +183,13 @@ async fn main() -> Result<(), Error> {
 
         if let Some(clipx) = group.iter(&client).find(|slave| slave.name() == "ClipX") {
             let (i, _o) = clipx.io_raw();
-            println!(
-                "{}ms {:?}",
-                start.elapsed().as_millis(),
-                clipx::get_measurement(
-                    i,
-                    [
-                        clipx::Signal::Electrical,
-                        clipx::Signal::Gross,
-                        clipx::Signal::Net
-                    ]
-                )
-            );
+            if let Err(err) = monitor::to_csv(&clipx::get_measurement(
+                start.elapsed(),
+                i,
+                [SignalKind::Electrical, SignalKind::Gross, SignalKind::Net],
+            )) {
+                println!("CSV_ERROR,{:?}", err);
+            };
         }
 
         tick_interval.tick().await;
