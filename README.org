@@ -1,0 +1,136 @@
+#+TITLE: =clipx-reader=
+
+This is a utility for fetching data off of an HBM ClipX amplifier over EtherCAT.
+
+* Usage
+
+** Setup
+
+Of course it's necessary to have all of the hardware ready to go before you try to run software that uses it.  Ensure that
+
+- the ClipX has power (port X2),
+- the EtherCAT IN port (X7) is plugged into a Linux computer (perhaps a Raspberry Pi),
+- and that your transducer is connected as specified by the datasheet (port X1).
+
+It's also necessary to know what network interface the Pi will communicate over.  Run =ip link= in a terminal on the Pi and work out which interface it probably is.  It will be =ethN= or =enoN= (where =N= is a number) since EtherCAT goes through an Ethernet interface, but it won't be =lo= or =wlanN=.
+
+** Building
+
+*** Obtaining source code
+
+You can get the source code with =git clone https://github.com/fpdotmonkey/clipx-reader=.  You'll need to have git installed on the Pi, which you can find instructions for in [[https://git-scm.com/downloads/linux][here]] in the Debian/Ubuntu section.  Keep note of the path that you cloned the source into, e.g. =/home/username/projects/clipx-reader/=.
+
+*** Compiling
+
+You'll need to have the [[https://www.rust-lang.org/][Rust compiler]] installed to build, which you can do as so in a terminal on the Pi (or on a development machine if you run Mac OS or Linux).
+
+#+BEGIN_SRC sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+#+END_SRC
+
+Then navigate to the path that you cloned the source into and ensure that you have the latest version.
+
+#+BEGIN_SRC sh
+cd /home/username/projects/clipx-reader/  # navigate to the source
+# ensure that the latest version is what's being used
+git checkout main  # switch to the source branch with release code on it
+git pull origin main  # get the latest code from Github
+#+END_SRC
+
+And then you'll be able to compile the code.
+
+#+BEGIN_SRC sh
+cargo build --release  # run the Rust compiler
+#+END_SRC
+
+** Running
+
+This will be steps to get a long-running test started and then validate that it's running so you can rest easy that there won't be any nasty surprises when you come to check on it.  Then there will also be a shutdown procedure.
+
+*** Startup
+
+To start a test run, execute these commands from the =clipx-reader= directory, replacing =$INTERFACE= with the interface for ClipX found [[*Setup][above]].
+
+#+BEGIN_SRC sh
+sudo ./target/release/clipx-reader $INTERFACE \
+     1>"./$(date +%Y%m%d%H%M%S)_clipx_recording.csv" \  # save the data
+     2>"./$(date +%Y%m%d%H%M%S)_clipx_recording.log" \  # save the logs
+     &  # run in the background so you can log out
+disown $!  # disconnect the program from the running shell so it doesn't
+           # terminate when you log out
+#+END_SRC
+
+The test is now running!  You can log out with Control-D.
+
+*** Validation
+
+It's good practice to make double sure that everything's running as you expect after you start it.  Here's some commands to check the current state of the program.
+
+Run this command to see that the output files have been created.  You should see them listed out along with some metadata about them.  The name of the file should have the time that you started the test run in year, month, day, hour, minute, second.
+
+#+BEGIN_SRC sh
+ls -lh | grep _clipx_recording
+# -rw-r--r-- 1 hydraulics hydraulics 4.6G Sep 24 10:08 20240917163027_clipx_recording.csv
+# -rw-r--r-- 1 hydraulics hydraulics  288 Sep 17 16:30 20240917163027_clipx_recording.log
+#+END_SRC
+
+Run this to ensure that the process is still running.  You should see that it prints out =1=.  If it's =0=, then the program isn't running, and if it's more than 1, then there are multiple clipx-reader processes running at once, which you shouldn't do either.  In that case, stop all of then and start the one that you want to run.
+
+#+BEGIN_SRC sh
+ps -ea | grep --count clipx-reader
+# 1
+#+END_SRC
+
+*** Shutdown
+
+To stop the process running, run this command.
+
+#+BEGIN_SRC sh
+pkill clipx-reader  # end all processes whose name contains "clipx-reader"
+#+END_SRC
+
+Make sure the duration of the test is right.  Get the last line of the CSV with this command and ensure that the first column shows the duration of the test in milliseconds.
+
+#+BEGIN_SRC sh
+tail -n 1 TIMESTAMP_clipx_recording.csv
+# 581875620,Some,Signals,ELECTRICAL,0.12791678,GROSS,-0.00028833747,NET,-0.00028833747
+#+END_SRC
+
+You can also check the file size is right.  In my own tests, I've found this generates around 7.9 kB/s.
+
+To get the data off of the Pi, run this command from a terminal on a computer connected to the same network as the Pi.  Substitue the Pi's IP address for =$IP= (try =ifconfig= if you don't know it), and the name of the user you've been using on the Pi for =$PI_USER=.
+
+#+BEGIN_SRC sh
+scp $PI_USER@$IP:~/projects/clipx-reader/TIMESTAMP_clipx_recording.csv ~/Downloads
+#+END_SRC
+
+That'll land all the data into the Downloads folder on your computer, where you can do anything you want with it, such as plotting it!
+
+* Plotting
+
+This project also has a script for plotting output data.  For this, it might be expedient to first downsample the data.  For example,
+
+#+BEGIN_SRC sh
+sed -n "1~10 p" ~/Downloads/TIMESTAMP_clipx_recording.csv > ~/Downloads/TIMESTAMP_clipx_recording_downsampled.csv
+#+END_SRC
+
+will take every 10th line from the CSV and write it to this =*_downsampled.csv= file.
+
+To run the plotting script, you'll need [[https://www.python.org/downloads/][python installed]].  You'll also need this project cloned onto your computer.
+
+Run these commands from this project direcotry and the plotting should just work.
+
+#+BEGIN_SRC sh
+# set up a Python virtual environment
+python -m venv venv
+# if you're on Linux/Mac OS/etc
+. venv/bin/activate
+# or if you're on Windows,
+. venv/Scripts/activate
+# install dependencies
+pip install -r requirements.txt
+# get plotting!
+python ./scripts/plot_data.py ~/Downloads/TIMESTAMP_clipx_recording_downsampled.csv
+#+END_SRC
+
+There'll be a window that comes up with the plot, and you'll be able to interface with it to save it out.
