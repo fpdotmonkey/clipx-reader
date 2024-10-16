@@ -62,6 +62,19 @@ disown $!  # disconnect the program from the running shell so it doesn't
 
 The test is now running!  You can log out with Control-D.
 
+You can also run it so that it will downsample the output data as it's generated, which saves on file size.
+
+#+BEGIN_SRC sh
+sudo ./target/release/clipx-reader $INTERFACE \
+     2>"./$(date +%Y%m%d%H%M%S)_clipx_recording.log" \  # save the logs
+    | sed -n '1~10p' \  # downsample the data 10X
+	  1>"./$(date +%Y%m%d%H%M%S)_clipx_recording.log" \ # save the data
+     &  # run in the background so you can log out
+disown $!  # disconnect the program from the running shell so it doesn't
+           # terminate when you log out
+#+END_SRC
+
+
 *** Validation
 
 It's good practice to make double sure that everything's running as you expect after you start it.  Here's some commands to check the current state of the program.
@@ -104,17 +117,21 @@ To get the data off of the Pi, run this command from a terminal on a computer co
 scp $PI_USER@$IP:~/projects/clipx-reader/TIMESTAMP_clipx_recording.csv ~/Downloads
 #+END_SRC
 
-That'll land all the data into the Downloads folder on your computer, where you can do anything you want with it, such as plotting it!
+That'll land all the data into the Downloads folder on your computer, where you can do anything you want with it, such as plotting it!  You can also copy it to any other directory on your computer.
 
 * Plotting
 
 This project also has a script for plotting output data.  For this, it might be expedient to first downsample the data.  For example,
 
 #+BEGIN_SRC sh
-sed -n "1~10 p" ~/Downloads/TIMESTAMP_clipx_recording.csv > ~/Downloads/TIMESTAMP_clipx_recording_downsampled.csv
+sed -n "1~10 p" /path/to/TIMESTAMP_clipx_recording.csv > /path/to/TIMESTAMP_clipx_recording_downsampled.csv
 #+END_SRC
 
-will take every 10th line from the CSV and write it to this =*_downsampled.csv= file.
+will take every 10th line from the CSV and write it to this =*_downsampled.csv= file.  That might not work on macOS, where instead you can try this.
+
+#+BEGIN_SRC sh
+awk 'NR == 1 || NR % 10 == 0' /path/to/TIMESTAMP_clipx_recording.csv > /path/to/TIMESTAMP_clipx_recording_downsampled.csv
+#+END_SRC
 
 To run the plotting script, you'll need [[https://www.python.org/downloads/][python installed]].  You'll also need this project cloned onto your computer.
 
@@ -122,6 +139,7 @@ Run these commands from this project direcotry and the plotting should just work
 
 #+BEGIN_SRC sh
 # set up a Python virtual environment
+# note that on some systems, python is called `python3`
 python -m venv venv
 # if you're on Linux/Mac OS/etc
 . venv/bin/activate
@@ -130,7 +148,7 @@ python -m venv venv
 # install dependencies
 pip install -r requirements.txt
 # get plotting!
-python ./scripts/plot_data.py ~/Downloads/TIMESTAMP_clipx_recording_downsampled.csv
+python ./scripts/plot_data.py /path/to/TIMESTAMP_clipx_recording_downsampled.csv
 #+END_SRC
 
 There'll be a window that comes up with the plot, and you'll be able to interface with it to save it out.
